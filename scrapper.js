@@ -1,5 +1,4 @@
 const puppeteer = require('puppeteer');
-const moment = require('moment');
 const fs = require('fs');
 
 const OPEN_MODAL_BUTTON_SELECTOR = 'button[class*="VfPpkd-LgbsSe VfPpkd-LgbsSe-OWXEXe-dgl2Hf ksBjEc lKxP2d LQeN7 aLey0c"]';
@@ -11,6 +10,7 @@ const NAME_SELECTOR  = '.X5PpBb';
 const COMMENT_SELECTOR  = '.h3YV2d';
 const RATE_SELECTOR  = '.iXRFPc';
 const DATE_SELECTOR  = '.bp9Aid';
+const chunkSize = 200;
 
 const initBrowser = async (url) => {
     const browser = await puppeteer.launch({ 
@@ -73,11 +73,10 @@ const delay = (time) => {
     });
 }
 
-const downloadReviews = (reviews) => {
-    const date = moment().format('YYYY-MM-DD-HH-mm-ss');
-    const filename = `./uploads/reviews-${date}.json`;
+const appendReviewsFile = (reviews) => {
+    const filename = `./uploads/reviews.json`;
 
-    fs.writeFile(filename, JSON.stringify(reviews, null, 2), (err) => {
+    fs.appendFile(filename, JSON.stringify(reviews, null, 2) + ',\n', (err) => {
         if (err) {
             console.error('Error writing file:', err);
         } else {
@@ -99,10 +98,15 @@ const scrapeReviews = async (url, numberOfReviews) => {
     let previousReviewCount = 0;
     let sameCount = 0;
 
-    for(let i = 0; i < numberOfReviews; i++) {
+    for(let i = 0; reviews.length < numberOfReviews; i++) {
         const newReviews = await getReviews(page);
         reviews = addNewReviews(reviews, newReviews);
         console.log(`Current number of reviews: ${reviews.length}`);
+
+        if (reviews.length >= numberOfReviews) {
+            console.log(`Number of reviews: ${reviews.length}`);
+            break;
+        }
 
         if(reviews.length === previousReviewCount) {
             sameCount++;
@@ -118,22 +122,22 @@ const scrapeReviews = async (url, numberOfReviews) => {
         previousReviewCount = reviews.length;
         await scrollPage(page, MODAL_SCROLLABLE_SELECTOR);
         await delay(500);
-        if(reviews.length >= numberOfReviews) {
-            break;
+
+        if (reviews.length >= chunkSize) {
+            const sortedReviews = sortReviewsByDate(reviews.slice(-chunkSize));
+            appendReviewsFile(sortedReviews);
+            reviews = reviews.slice(0, -chunkSize);
         }
     }
-    await browser.close();
 
-    const sortedReviews =  sortReviewsByDate(reviews.slice(0, numberOfReviews));
-    console.log(`Scrapped number of reviews: ${sortedReviews.length}`);
-    downloadReviews(sortedReviews);
+    await browser.close();
 };
 
 const url = 'https://play.google.com/store/apps/details?id=com.spotify.music&hl=en&gl=US';
 
 console.time('Scraping Time');
 
-scrapeReviews(url, 10000)
+scrapeReviews(url, 500)
     .then(reviews => {
         console.dir(reviews, { 'maxArrayLength': null });
         console.timeEnd('Scraping Time');
