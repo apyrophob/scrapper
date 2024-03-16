@@ -13,11 +13,14 @@ const SELECTORS = {
     DATE: '.bp9Aid'
 };
 
-const FILENAME = './uploads/reviews.json';
+const FILENAME = './uploads/reviews.jsonl';
 const stream = fs.createWriteStream(FILENAME, {flags:'a'});
 
 const initBrowser = async (url) => {
-    const browser = await puppeteer.launch();
+    const browser = await puppeteer.launch({
+        //uncomment the line below to see the browser in action
+        // headless: false,
+    });
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: 'networkidle2' });
     return { browser, page };
@@ -36,23 +39,22 @@ const scrollPage = async (page, selector) => {
 };
 
 const getReviews = async (page, startIndex, max) => {
-    return await page.evaluate((SELECTORS, startIndex, max) => {
-        const reviews = [];
-        for (let i = startIndex; i < max; i++) {
-            const reviewNode = document.querySelector(`${SELECTORS.REVIEW}:nth-child(${i + 1})`);
+    const reviews = [];
+    for (let i = startIndex; i < max; i++) {
+        const reviewNode = await page.$(`${SELECTORS.REVIEW}:nth-child(${i + 1})`);
 
-            if (!reviewNode) break;
+        if (!reviewNode) break;
 
-            const name = reviewNode.querySelector(SELECTORS.NAME)?.textContent || '';
-            const comment = reviewNode.querySelector(SELECTORS.COMMENT)?.textContent || '';
-            const rateString = reviewNode.querySelector(SELECTORS.RATE)?.getAttribute('aria-label') || '';
-            const rate = rateString.match(/\d+/) ? rateString.match(/\d+/)[0] : '';
-            const date = reviewNode.querySelector(SELECTORS.DATE)?.textContent || '';
+        const name = await reviewNode.$eval(SELECTORS.NAME, node => node.textContent).catch(() => '');
+        const comment = await reviewNode.$eval(SELECTORS.COMMENT, node => node.textContent).catch(() => '');
+        const rateString = await reviewNode.$eval(SELECTORS.RATE, node => node.getAttribute('aria-label')).catch(() => '');
+        const rate = rateString.match(/\d+/) ? rateString.match(/\d+/)[0] : '';
+        const date = await reviewNode.$eval(SELECTORS.DATE, node => node.textContent).catch(() => '');
 
-            reviews.push({ name, comment, rate, date });
-        }
-        return reviews;
-    }, SELECTORS, startIndex, max);
+        reviews.push({ name, comment, rate, date });
+    }
+
+    return reviews;
 };
 
 const delay = (time) => new Promise(resolve => setTimeout(resolve, time));
@@ -73,7 +75,7 @@ const scrapeReviews = async (url, max) => {
     while (totalReviewsCount < max) {
         console.time('Scraping Time');
         const newReviews = await getReviews(page, totalReviewsCount, totalReviewsCount + 20);
-        newReviews.forEach(review => stream.write(`${JSON.stringify(review)},\n`));
+        newReviews.forEach(review => stream.write(JSON.stringify(review) + '\n'));
         totalReviewsCount += newReviews.length;
         console.log(`Added ${totalReviewsCount} reviews to the file.`);
 
