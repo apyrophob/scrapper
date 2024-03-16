@@ -35,30 +35,27 @@ const scrollPage = async (page, selector) => {
     }, selector);
 };
 
-const getReviews = async (page, startIndex) => {
-    return await page.$$eval(SELECTORS.REVIEW, (nodes, SELECTORS, startIndex) => nodes.slice(startIndex).map(node => {
-        const name = node.querySelector(SELECTORS.NAME)?.textContent || '';
-        const comment = node.querySelector(SELECTORS.COMMENT)?.textContent || '';
-        const rateString = node.querySelector(SELECTORS.RATE)?.getAttribute('aria-label') || '';
-        const rate = rateString.match(/\d+/) ? rateString.match(/\d+/)[0] : '';
-        const date = node.querySelector(SELECTORS.DATE)?.textContent || '';
+const getReviews = async (page, startIndex, max) => {
+    return await page.evaluate((SELECTORS, startIndex, max) => {
+        const reviews = [];
+        for (let i = startIndex; i < max; i++) {
+            const reviewNode = document.querySelector(`${SELECTORS.REVIEW}:nth-child(${i + 1})`);
 
-        return { name, comment, rate, date };
-    }), SELECTORS, startIndex);
+            if (!reviewNode) break;
+
+            const name = reviewNode.querySelector(SELECTORS.NAME)?.textContent || '';
+            const comment = reviewNode.querySelector(SELECTORS.COMMENT)?.textContent || '';
+            const rateString = reviewNode.querySelector(SELECTORS.RATE)?.getAttribute('aria-label') || '';
+            const rate = rateString.match(/\d+/) ? rateString.match(/\d+/)[0] : '';
+            const date = reviewNode.querySelector(SELECTORS.DATE)?.textContent || '';
+
+            reviews.push({ name, comment, rate, date });
+        }
+        return reviews;
+    }, SELECTORS, startIndex, max);
 };
 
 const delay = (time) => new Promise(resolve => setTimeout(resolve, time));
-
-const removeDuplicatesFromFile = async () => {
-    try {
-        const data = await fs.readFile(FILENAME, 'utf8');
-        const reviews = JSON.parse(data);
-        const uniqueReviews = Array.from(new Set(reviews.map(JSON.stringify))).map(JSON.parse);
-        await fs.writeFile(FILENAME, JSON.stringify(uniqueReviews, null, 2), 'utf8');
-    } catch (error) {
-        console.error(`Error: ${error}`);
-    }
-};
 
 const scrapeReviews = async (url, max) => {
     const { browser, page } = await initBrowser(url);
@@ -72,28 +69,24 @@ const scrapeReviews = async (url, max) => {
     await delay(500);
 
     let totalReviewsCount = 0;
-    let startIndex = 0;
     
     while (totalReviewsCount < max) {
-        const newReviews = await getReviews(page, startIndex);
-        startIndex += newReviews.length;
+        console.time('Scraping Time');
+        const newReviews = await getReviews(page, totalReviewsCount, totalReviewsCount + 20);
         newReviews.forEach(review => stream.write(`${JSON.stringify(review)},\n`));
         totalReviewsCount += newReviews.length;
         console.log(`Added ${totalReviewsCount} reviews to the file.`);
 
         await scrollPage(page, SELECTORS.MODAL_SCROLLABLE);
         await delay(1000);
+        console.timeEnd('Scraping Time');
     }
 
     stream.end();
     await browser.close();
-    await removeDuplicatesFromFile();
 };
 
 const url = 'https://play.google.com/store/apps/details?id=com.spotify.music&hl=en&gl=US';
 
-console.time('Scraping Time');
-
-scrapeReviews(url, 1000)
-    .then(() => console.timeEnd('Scraping Time'))
+scrapeReviews(url, 10000)
     .catch(console.error);
