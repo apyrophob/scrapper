@@ -31,12 +31,12 @@ const onClickSelector = async (page, selector) => {
 const scrollPage = async (page, selector) => {
     await page.evaluate((selector) => {
         const modalScrollable = document.querySelector(selector);
-        modalScrollable.scrollTop = 10000;
+        modalScrollable.scrollTop = modalScrollable.scrollHeight;
     }, selector);
 };
 
-const getReviews = async (page) => {
-    return await page.$$eval(SELECTORS.REVIEW, (nodes, SELECTORS) => nodes.map(node => {
+const getReviews = async (page, startIndex) => {
+    return await page.$$eval(SELECTORS.REVIEW, (nodes, SELECTORS, startIndex) => nodes.slice(startIndex).map(node => {
         const name = node.querySelector(SELECTORS.NAME)?.textContent || '';
         const comment = node.querySelector(SELECTORS.COMMENT)?.textContent || '';
         const rateString = node.querySelector(SELECTORS.RATE)?.getAttribute('aria-label') || '';
@@ -44,7 +44,7 @@ const getReviews = async (page) => {
         const date = node.querySelector(SELECTORS.DATE)?.textContent || '';
 
         return { name, comment, rate, date };
-    }), SELECTORS);
+    }), SELECTORS, startIndex);
 };
 
 const delay = (time) => new Promise(resolve => setTimeout(resolve, time));
@@ -76,9 +76,11 @@ const scrapeReviews = async (url, max) => {
 
     let reviews = [];
     let totalReviewsCount = 0;
+    let startIndex = 0;
     
     while (totalReviewsCount < max) {
-        const newReviews = await getReviews(page);
+        const newReviews = await getReviews(page, startIndex);
+        startIndex += newReviews.length;
         reviews = [...reviews, ...newReviews];
         console.log(`Scrapped ${reviews.length} reviews`);
 
