@@ -47,64 +47,58 @@ const getReviews = async (page) => {
     }), SELECTORS);
 };
 
-const addNewReviews = (reviews, newReviews) => {
-    return [...reviews, ...newReviews.filter(newReview => !reviews.some(review => review.comment === newReview.comment))];
-};
-
-const sortReviewsByDate = (reviews) => {
-    return reviews.sort((a, b) => new Date(b.date) - new Date(a.date));
-};
-
 const delay = (time) => new Promise(resolve => setTimeout(resolve, time));
 
-const appendReviewsFile = async (reviews) => {
-    await fs.appendFile(FILENAME, JSON.stringify(reviews, null, 2) + ',\n');
+const appendReviewsFile = async (newReviews) => {
+    try {
+        const data = await fs.readFile(FILENAME, 'utf8');
+
+        let reviews = data ? JSON.parse(data) : [];
+
+        reviews = [...reviews, ...newReviews.filter(review => !reviews.includes(review))];
+
+        await fs.writeFile(FILENAME, JSON.stringify(reviews, null, 2), 'utf8');
+    } catch (error) {
+        console.error(`Error: ${error}`);
+    }
 };
 
-const scrapeReviews = async (url, numberOfReviews) => {
-    let reviews = [];
+const scrapeReviews = async (url, max) => {
     const { browser, page } = await initBrowser(url);
     await onClickSelector(page, SELECTORS.OPEN_MODAL_BUTTON);
     await delay(500);
+
     await onClickSelector(page, SELECTORS.OPEN_SORT_SELECT);
     await delay(500);
+
     await onClickSelector(page, SELECTORS.OPTION);
     await delay(500);
 
-    let previousReviewCount = 0;
-    let sameCount = 0;
-
-    while (reviews.length < numberOfReviews) {
+    let reviews = [];
+    let totalReviewsCount = 0;
+    while (totalReviewsCount < max) {
         const newReviews = await getReviews(page);
-        reviews = addNewReviews(reviews, newReviews);
-
-        if (reviews.length === previousReviewCount) {
-            sameCount++;
-            if (sameCount >= 3) break;
-        } else {
-            sameCount = 0;
-        }
-
-        previousReviewCount = reviews.length;
-        await scrollPage(page, SELECTORS.MODAL_SCROLLABLE);
-        await delay(500);
+        reviews = [...reviews, ...newReviews];
+        console.log(`Scrapped ${reviews.length} reviews`);
 
         if (reviews.length >= CHUNK_SIZE) {
-            const sortedReviews = sortReviewsByDate(reviews.slice(-CHUNK_SIZE));
-            await appendReviewsFile(sortedReviews);
-            console.log(`Scraped ${reviews.length} reviews`);
-            reviews = reviews.slice(0, -CHUNK_SIZE);
+            appendReviewsFile(reviews);
+            totalReviewsCount += reviews.length;
+            console.log(`Added ${totalReviewsCount} reviews to the file.`);
+            reviews = [];
         }
+
+        await scrollPage(page, SELECTORS.MODAL_SCROLLABLE);
+        await delay(1000);
     }
 
     await browser.close();
-    return reviews;
 };
 
 const url = 'https://play.google.com/store/apps/details?id=com.spotify.music&hl=en&gl=US';
 
 console.time('Scraping Time');
 
-scrapeReviews(url, 300)
+scrapeReviews(url, 1000)
     .then(() => console.timeEnd('Scraping Time'))
     .catch(console.error);
