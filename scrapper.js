@@ -1,5 +1,5 @@
 const puppeteer = require('puppeteer');
-const fs = require('fs').promises;
+const fs = require('fs');
 
 const SELECTORS = {
     OPEN_MODAL_BUTTON: 'button[class*="VfPpkd-LgbsSe VfPpkd-LgbsSe-OWXEXe-dgl2Hf ksBjEc lKxP2d LQeN7 aLey0c"]',
@@ -13,8 +13,8 @@ const SELECTORS = {
     DATE: '.bp9Aid'
 };
 
-const CHUNK_SIZE = 200;
 const FILENAME = './uploads/reviews.json';
+const stream = fs.createWriteStream(FILENAME, {flags:'a'});
 
 const initBrowser = async (url) => {
     const browser = await puppeteer.launch();
@@ -49,15 +49,12 @@ const getReviews = async (page, startIndex) => {
 
 const delay = (time) => new Promise(resolve => setTimeout(resolve, time));
 
-const appendReviewsFile = async (newReviews) => {
+const removeDuplicatesFromFile = async () => {
     try {
         const data = await fs.readFile(FILENAME, 'utf8');
-
-        let reviews = data ? JSON.parse(data) : [];
-
-        reviews = [...reviews, ...newReviews.filter(review => !reviews.includes(review))];
-
-        await fs.writeFile(FILENAME, JSON.stringify(reviews, null, 2), 'utf8');
+        const reviews = JSON.parse(data);
+        const uniqueReviews = Array.from(new Set(reviews.map(JSON.stringify))).map(JSON.parse);
+        await fs.writeFile(FILENAME, JSON.stringify(uniqueReviews, null, 2), 'utf8');
     } catch (error) {
         console.error(`Error: ${error}`);
     }
@@ -74,28 +71,23 @@ const scrapeReviews = async (url, max) => {
     await onClickSelector(page, SELECTORS.OPTION);
     await delay(500);
 
-    let reviews = [];
     let totalReviewsCount = 0;
     let startIndex = 0;
     
     while (totalReviewsCount < max) {
         const newReviews = await getReviews(page, startIndex);
         startIndex += newReviews.length;
-        reviews = [...reviews, ...newReviews];
-        console.log(`Scrapped ${reviews.length} reviews`);
-
-        if (reviews.length >= CHUNK_SIZE) {
-            appendReviewsFile(reviews);
-            totalReviewsCount += reviews.length;
-            console.log(`Added ${totalReviewsCount} reviews to the file.`);
-            reviews = [];
-        }
+        newReviews.forEach(review => stream.write(`${JSON.stringify(review)},\n`));
+        totalReviewsCount += newReviews.length;
+        console.log(`Added ${totalReviewsCount} reviews to the file.`);
 
         await scrollPage(page, SELECTORS.MODAL_SCROLLABLE);
         await delay(1000);
     }
 
+    stream.end();
     await browser.close();
+    await removeDuplicatesFromFile();
 };
 
 const url = 'https://play.google.com/store/apps/details?id=com.spotify.music&hl=en&gl=US';
