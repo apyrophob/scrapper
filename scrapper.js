@@ -31,7 +31,7 @@ const onClickSelector = async (page, selector) => {
 const scrollPage = async (page, selector) => {
     await page.evaluate((selector) => {
         const modalScrollable = document.querySelector(selector);
-        modalScrollable.scrollTop = modalScrollable.scrollHeight;
+        modalScrollable.scrollTop = 10000;
     }, selector);
 };
 
@@ -76,6 +76,7 @@ const scrapeReviews = async (url, max) => {
 
     let reviews = [];
     let totalReviewsCount = 0;
+    
     while (totalReviewsCount < max) {
         const newReviews = await getReviews(page);
         reviews = [...reviews, ...newReviews];
