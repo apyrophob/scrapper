@@ -78,7 +78,6 @@ const scrapeReviews = async (url, max) => {
         console.log(`Added ${totalReviewsCount} reviews to the file.`);
 
         await scrollPage(page, SELECTORS.MODAL_SCROLLABLE);
-        await delay(1000);
         console.timeEnd('Scraping Time');
     }
 
