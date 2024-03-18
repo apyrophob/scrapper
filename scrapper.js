@@ -1,5 +1,6 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
+const Apify = require('apify');
 
 const SELECTORS = {
     OPEN_MODAL_BUTTON: 'button[class*="VfPpkd-LgbsSe VfPpkd-LgbsSe-OWXEXe-dgl2Hf ksBjEc lKxP2d LQeN7 aLey0c"]',
@@ -84,10 +85,21 @@ const scrapeReviews = async (url, max) => {
     }
 
     stream.end();
+    await new Promise(resolve => stream.on('finish', resolve));
+
+    const filePath = './reviews.jsonl';
+    await Apify.setValue('OUTPUT', fs.createReadStream(filePath), { contentType: 'application/jsonl' })
     await browser.close();
 };
 
-const url = 'https://play.google.com/store/apps/details?id=com.spotify.music&hl=en&gl=US';
+Apify.main(async () => {
+    try {
+        const input = await Apify.getInput();
+        const { url, numberOfReviews } = input;
 
-scrapeReviews(url, 10000)
-    .catch(console.error);
+        await scrapeReviews(url, numberOfReviews);
+    } catch (error) {
+        console.error(`Failed to scrape reviews: ${error.message}`);
+        throw error;
+    }
+});
