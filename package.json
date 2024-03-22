@@ -1,10 +1,21 @@
 {
-  "name": "scrapper",
-  "version": "1.0.0",
-  "main": "index.js",
-  "license": "MIT",
-  "dependencies": {
-    "moment": "^2.30.1",
-    "puppeteer": "^22.4.1"
-  }
+	"name": "reviews-scrapper",
+	"version": "0.0.1",
+	"type": "module",
+	"description": "This is an example of an Apify actor.",
+	"dependencies": {
+		"apify": "^3.1.10",
+		"crawlee": "^3.5.4",
+		"puppeteer": "*"
+	},
+	"devDependencies": {
+		"@apify/eslint-config": "^0.4.0",
+		"eslint": "^8.50.0"
+	},
+	"scripts": {
+		"start": "node src/main.js",
+		"test": "echo \"Error: oops, the actor has no tests yet, sad!\" && exit 1"
+	},
+	"author": "It's not you it's me",
+	"license": "ISC"
 }
